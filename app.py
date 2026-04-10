@@ -1,8 +1,8 @@
 """Minimal Streamlit resume tailoring app.
 
-Version 3 keeps the same simple app structure, but uses a few-shot prompt.
-The goal is to show that a worked example can improve output consistency
-without adding extra parsing, validation, or backend complexity.
+Version 4 uses a plan-driven prompt built from an external plan file.
+The goal is to show that separating the system plan from the app code
+improves consistency and makes the prompt easier to maintain.
 """
 
 import json
@@ -12,61 +12,39 @@ import urllib.request
 import streamlit as st
 
 
-def build_prompt(resume: str, job_description: str) -> str:
-    """Build a few-shot prompt using one example to demonstrate the pattern.
+def load_plan() -> str:
+    """Load the reusable system plan from plan.md.
 
-    Few-shot prompting improves consistency because the model can imitate
-    the example structure directly instead of inferring the format from
-    abstract instructions alone.
-
-    This reduces engineering effort further than Version 2 because the
-    example itself teaches the response style, which lowers the need for
-    extra output cleanup or formatting rules in code.
+    Plan-driven prompting improves consistency because the output rules live
+    in a single source of truth. It also separates system design from prompt
+    assembly, which makes the app easier to maintain and scale.
     """
+    with open("plan.md", "r", encoding="utf-8") as file:
+        return file.read()
+
+
+def build_prompt(resume: str, job_description: str) -> str:
+    """Build the final prompt from the plan file and user inputs."""
+    plan = load_plan()
     return (
-        "Example\n\n"
-        "Job Description:\n"
-        "Looking for a backend developer with Python, Django, REST APIs, "
-        "PostgreSQL, and Git experience. Knowledge of Docker is a plus.\n\n"
-        "Resume:\n"
-        "Software Developer with experience in Python, Flask, MySQL, Git, "
-        "and web application development. Built internal tools and APIs for "
-        "business teams. Familiar with deployment and debugging.\n\n"
-        "Output:\n"
-        "Tailored Resume:\n"
-        "Software Developer with experience in Python, backend web "
-        "development, API development, databases, and Git. Built internal "
-        "tools and APIs for business teams, with strong hands-on experience "
-        "in developing and debugging web applications.\n\n"
-        "Match Score:\n"
-        "82\n\n"
-        "Missing Skills:\n"
-        "- Django\n"
-        "- PostgreSQL\n"
-        "- Docker\n\n"
-        "Suggestions:\n"
-        "- Emphasize any backend API work that aligns with REST API development.\n"
-        "- Highlight database experience in a way that maps more closely to PostgreSQL.\n"
-        "- Mention deployment tools or container exposure if relevant.\n\n"
-        "Now generate the output for the following input.\n\n"
-        f"Job Description:\n{job_description}\n\n"
+        f"{plan}\n\n"
         f"Resume:\n{resume}\n\n"
-        "Output:\n"
+        f"Job Description:\n{job_description}"
     )
 
 
 def call_llm(prompt: str) -> str:
     """Call the local Ollama API with the gemma3 model.
 
-    A lower temperature makes the output more stable, which helps the model
-    follow the example format more consistently.
+    A lower temperature increases consistency and helps the model follow
+    the external plan more reliably.
     """
     payload = json.dumps(
         {
             "model": "gemma3:latest",
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.3},
+            "options": {"temperature": 0.2},
         }
     ).encode("utf-8")
 
@@ -100,9 +78,8 @@ def main() -> None:
         prompt = build_prompt(resume, job_description)
         output = call_llm(prompt)
 
-        # Version 3 still keeps the app simple and displays the model output
-        # directly. The example in the prompt guides the model toward a more
-        # consistent response shape without adding backend parsing logic.
+        # Version 4 still keeps the app simple and displays the model output
+        # directly, but the prompt rules now come from a separate plan file.
         st.subheader("Output")
         st.write(output)
 
